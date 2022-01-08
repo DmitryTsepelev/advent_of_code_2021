@@ -16,25 +16,25 @@ getPatterns' (current:rest) acc = getPatterns' rest (acc ++ [current])
 type DecodedPatterns = [(Pattern, Int)]
 
 patternFor :: Int -> DecodedPatterns -> Pattern
-patternFor _ [] = "" -- unreachable
-patternFor expectedDigit ((pattern, digit):restPatterns)
-  | digit == expectedDigit = pattern
+patternFor _ [] = error "unreachable"
+patternFor expectedDigit ((digitPattern, digit):restPatterns)
+  | digit == expectedDigit = digitPattern
   | otherwise = patternFor expectedDigit restPatterns
 
 digitFor :: Pattern -> DecodedPatterns -> Int
-digitFor _ [] = 0 -- unreachable
-digitFor expectedPattern ((pattern, digit):restPatterns)
-  | pattern == expectedPattern = digit
+digitFor _ [] = error "unreachable"
+digitFor expectedPattern ((digitPattern, digit):restPatterns)
+  | digitPattern == expectedPattern = digit
   | otherwise = digitFor expectedPattern restPatterns
 
 -- --------------------------------------------------------
 
 detectSimpleDigit :: Pattern -> Maybe Int
-detectSimpleDigit pattern
-  | length pattern == 2 = Just 1
-  | length pattern == 3 = Just 7
-  | length pattern == 4 = Just 4
-  | length pattern == 7 = Just 8
+detectSimpleDigit digitPattern
+  | length digitPattern == 2 = Just 1
+  | length digitPattern == 3 = Just 7
+  | length digitPattern == 4 = Just 4
+  | length digitPattern == 7 = Just 8
   | otherwise = Nothing
 
 countDigits :: [Pattern] -> Int
@@ -45,40 +45,42 @@ countDigits' (current:rest) count
   | otherwise = countDigits' rest count
 
 solution1 :: [[String]] -> Int
-solution1 rows = foldl (\acc row -> acc + (countDigits (getDigitPatterns row))) 0 rows
+solution1
+  = foldl (\acc row -> acc + countDigits (getDigitPatterns row)) 0
 
 -- --------------------------------------------------------
 
 subList :: Eq a => [a] -> [a] -> Bool
 subList [] [] = True
-subList _ []    = False
-subList [] _    = True
+subList _ [] = False
+subList [] _ = True
 subList (x:xs) (y:ys)
-    | x == y    = subList xs ys
-    | otherwise = subList (x:xs) ys
+  | x == y    = subList xs ys
+  | otherwise = subList (x:xs) ys
 
-decodeSimpleDigits :: [Pattern] -> DecodedPatterns
-decodeSimpleDigits [] = []
-decodeSimpleDigits (currentPattern:restPatterns)
-  | Just justDecodedDigit <- decodedDigit = [(currentPattern, justDecodedDigit)] ++ (decodeSimpleDigits restPatterns)
-  | otherwise = decodeSimpleDigits restPatterns
+decodeSimpleDigits :: DecodedPatterns -> [Pattern] -> DecodedPatterns
+decodeSimpleDigits _ [] = []
+decodeSimpleDigits decodedPatterns (currentPattern:restPatterns)
+  | Just justDecodedDigit <- decodedDigit = newDecodedPatterns justDecodedDigit
+  | otherwise = decodeSimpleDigits decodedPatterns restPatterns
   where
+    newDecodedPatterns digit = (currentPattern, digit) : decodeSimpleDigits decodedPatterns restPatterns
     decodedDigit = detectSimpleDigit currentPattern
 
 decodeThree :: DecodedPatterns -> [Pattern] -> DecodedPatterns
 decodeThree decodedPatterns patterns
   | Just justNinePattern <- ninePattern = [(justNinePattern, 3)]
-  | otherwise = [] -- unreachable
+  | otherwise = error "unreachable"
   where
-    ninePattern = find (\pattern -> (length pattern) == 5 && (subList onePattern pattern)) patterns
+    ninePattern = find (\digitPattern -> length digitPattern == 5 && subList onePattern digitPattern) patterns
     onePattern = patternFor 1 decodedPatterns
 
 decodeZero :: DecodedPatterns -> [Pattern] -> DecodedPatterns
 decodeZero decodedPatterns patterns
   | Just justZeroPattern <- zeroPattern = [(justZeroPattern, 0)]
-  | otherwise = [] -- unreachable
+  | otherwise = error "unreachable"
   where
-    zeroPattern = find (\pattern -> (subList onePattern pattern) && not (subList threePattern pattern)) candidates
+    zeroPattern = find (\digitPattern -> subList onePattern digitPattern && not (subList threePattern digitPattern)) candidates
     onePattern = patternFor 1 decodedPatterns
     threePattern = patternFor 3 decodedPatterns
 
@@ -89,37 +91,37 @@ decodeSixAndNine decodedPatterns patterns
   | Just justNinePattern <- ninePattern
   , Just justSixPattern <- sixPattern
   = [(justSixPattern, 6), (justNinePattern, 9)]
-  | otherwise = [] -- unreachable
+  | otherwise = error "unreachable"
   where
-    ninePattern = find (\pattern -> (subList onePattern pattern)) candidates
-    sixPattern = find (\pattern -> not (subList onePattern pattern)) candidates
+    ninePattern = find (subList onePattern) candidates
+    sixPattern = find (not . subList onePattern) candidates
     onePattern = patternFor 1 decodedPatterns
 
     candidates = filter ((==6) . length) patterns
 
 decodeTwoAndFive :: DecodedPatterns -> [Pattern] -> DecodedPatterns
 decodeTwoAndFive decodedPatterns patterns
-  | Just justTwoPattern <- twoPattern, Just justFivePattern <- fivePattern = [(justTwoPattern, 2), (justFivePattern, 5)]
-  | otherwise = [] -- unreachable
+  | Just justTwoPattern <- twoPattern
+  , Just justFivePattern <- fivePattern
+  = [(justTwoPattern, 2), (justFivePattern, 5)]
+  | otherwise = error "unreachable"
   where
-    twoPattern = find (\pattern -> differentSector `elem` pattern) candidates
-    fivePattern = find (\pattern -> differentSector `notElem` pattern) candidates
+    twoPattern = find (\digitPattern -> differentSector `elem` digitPattern) candidates
+    fivePattern = find (\digitPattern -> differentSector `notElem` digitPattern) candidates
     candidates = filter ((==5) . length) patterns
-    differentSector = head $ (patternFor 8 decodedPatterns) \\ (patternFor 6 decodedPatterns)
+    differentSector = head $ patternFor 8 decodedPatterns \\ patternFor 6 decodedPatterns
+
+applyDecoder :: (DecodedPatterns -> [Pattern] -> DecodedPatterns) -> [Pattern] -> DecodedPatterns -> ([Pattern], DecodedPatterns)
+applyDecoder decoder patterns decodedPatterns =
+  (restPatterns, newDecodedPatterns)
+  where
+    newDecodedPatterns = decodedPatterns ++ decoder decodedPatterns patterns
+    restPatterns = patterns \\ map fst newDecodedPatterns
 
 decode :: [Pattern] -> DecodedPatterns
 decode patterns = do
-  let decodedPatterns = decodeSimpleDigits patterns
-  let patterns2 = patterns \\ map fst decodedPatterns
-  let decodedPatterns2 = decodedPatterns ++ (decodeThree decodedPatterns patterns2)
-
-  let patterns3 = patterns \\ map fst decodedPatterns
-  let decodedPatterns3 = decodedPatterns2 ++ (decodeZero decodedPatterns2 patterns3)
-
-  let patterns4 = patterns2 \\ map fst decodedPatterns3
-  let decodedPatterns4 = decodedPatterns3 ++ (decodeSixAndNine decodedPatterns3 patterns4)
-  let patterns5 = patterns3 \\ map fst decodedPatterns4
-  decodedPatterns4 ++ (decodeTwoAndFive decodedPatterns4 patterns5)
+  snd $ foldl (\(patterns, decodedPatterns) decoder -> applyDecoder decoder patterns decodedPatterns) (patterns, []) decoders
+  where decoders = [decodeSimpleDigits, decodeThree, decodeZero, decodeSixAndNine, decodeTwoAndFive]
 
 digitsToNumber :: [Int] -> Int
 digitsToNumber = foldl (\acc currentDigit -> acc * 10 + currentDigit) 0
@@ -133,13 +135,13 @@ solution2' (row:rest) acc =
     decodedPatterns = decode patterns
     patterns = getPatterns row
     resultPatterns = getDigitPatterns row
-    newAcc = acc + (digitsToNumber $ map (\pattern -> digitFor pattern decodedPatterns) resultPatterns)
+    newAcc = acc + digitsToNumber (map (`digitFor` decodedPatterns) resultPatterns)
 
 -- --------------------------------------------------------
 
 main = do
   content <- readFile "input.txt"
-  let rows = map (\line -> map sort (words line)) $ lines content
+  let rows = map (map sort . words) $ lines content
 
   putStrLn("Solution 1 is " ++ show(solution1 rows))
   putStrLn("Solution 2 is " ++ show(solution2 rows))
