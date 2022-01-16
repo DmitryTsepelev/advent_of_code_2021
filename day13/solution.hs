@@ -63,9 +63,33 @@ parseInput (line:rest)
 
 -- Folding
 
+addPosition :: Paper -> Paper -> Position -> Paper
+addPosition initialPaper paper position
+  | position `elem` initialPaper = paper
+  | otherwise = position:paper
+
+performFold :: Paper -> Fold -> Paper
+performFold paper = performFold' paper paper
+performFold' _ [] fold = []
+performFold' initialPaper (position:rest) fold
+  | FoldY foldY <- fold
+  , y position > foldY = insert (Position (x position) (2 * foldY - y position))
+  | FoldX foldX <- fold
+  , x position > foldX = insert (Position (2 * foldX - x position) (y position))
+  | otherwise = position:restFold
+  where
+    restFold = performFold' initialPaper rest fold
+    insert position = addPosition initialPaper restFold position
+
+performFolds :: Paper -> [Fold] -> Paper
+performFolds = foldl performFold
+
 main = do
   input <- readFile "input.txt"
   let (paper, folds) = parseInput $ lines input
 
-  printPaper paper
-  -- print $ rowIdx (paper!!0)
+  let solution1 = length $ performFold paper (head folds)
+  putStrLn("Solution 1 is " ++ show solution1)
+
+  putStrLn "Solution 2:"
+  printPaper $ performFolds paper folds
