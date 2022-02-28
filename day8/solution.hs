@@ -2,6 +2,8 @@ import Data.List
 
 type Pattern = String
 
+-- Test
+
 getDigitPatterns :: [String] -> [Pattern]
 getDigitPatterns ("|":digits) = digits
 getDigitPatterns arr = getDigitPatterns $ tail arr
